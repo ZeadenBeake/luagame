@@ -7,6 +7,7 @@ function M.new()
     party = party.new(),
     roomItems = {},
     flags = {},
+    world = { turn = 0 },
   }
 end
 

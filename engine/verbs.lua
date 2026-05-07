@@ -55,6 +55,7 @@ local function move(dir)
     end
     eng.state.party.location = target
     look(eng)
+    eng:tick()
   end
 end
 
@@ -115,6 +116,7 @@ function M.builtins()
     state.removeItemFromRoom(eng.state, eng.state.party.location, id)
     character.addItem(char, id)
     output.print(char.name .. " takes the " .. itemName(eng, id) .. ".")
+    eng:tick()
   end
 
   v.drop = function(eng, args)
@@ -125,6 +127,7 @@ function M.builtins()
     character.removeItem(char, id)
     state.placeItem(eng.state, eng.state.party.location, id)
     output.print(char.name .. " drops the " .. itemName(eng, id) .. ".")
+    eng:tick()
   end
 
   v.examine = function(eng, args)

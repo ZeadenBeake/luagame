@@ -8,6 +8,7 @@ local suites = {
   "tests.test_character",
   "tests.test_party",
   "tests.test_verbs",
+  "tests.test_world",
 }
 
 local total, failed = 0, 0

@@ -18,6 +18,8 @@ function M.new()
     state = state.new(),
     verbs = verbs.builtins(),
     _hooks = {},
+    _tickHooks = {},
+    _scheduled = {},
     _running = false,
   }, Engine)
   return eng
@@ -58,6 +60,37 @@ function Engine:partyList() return party.list(self.state.party) end
 function Engine:onSave(fn) self._hooks.onSave = fn end
 function Engine:onLoad(fn) self._hooks.onLoad = fn end
 function Engine:onTurn(fn) self._hooks.onTurn = fn end
+
+function Engine:tick()
+  self.state.world.turn = self.state.world.turn + 1
+  local turn = self.state.world.turn
+  for _, fn in ipairs(self._tickHooks) do fn(self, turn) end
+  local remaining = {}
+  for _, entry in ipairs(self._scheduled) do
+    if entry.at <= turn then
+      entry.fn(self, turn)
+    else
+      remaining[#remaining + 1] = entry
+    end
+  end
+  self._scheduled = remaining
+end
+
+function Engine:onTick(fn)
+  assert(type(fn) == "function", "onTick requires a function")
+  table.insert(self._tickHooks, fn)
+end
+
+function Engine:scheduleAt(turn, fn)
+  assert(type(turn) == "number", "scheduleAt: turn must be a number")
+  assert(type(fn) == "function", "scheduleAt: fn must be a function")
+  table.insert(self._scheduled, { at = turn, fn = fn })
+end
+
+function Engine:scheduleIn(delta, fn)
+  assert(type(delta) == "number" and delta > 0, "scheduleIn: delta must be a positive number")
+  self:scheduleAt(self.state.world.turn + delta, fn)
+end
 
 function Engine:snapshot() return state.snapshot(self.state) end
 function Engine:restore(snap) state.restore(self.state, snap) end
