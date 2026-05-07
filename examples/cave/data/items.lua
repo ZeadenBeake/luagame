@@ -20,6 +20,14 @@ return {
     takeable = true,
   },
   {
+    id = "feather_amulet",
+    name = "feather amulet",
+    description = "A pendant set with iridescent feathers. Something about it hums.",
+    aliases = { "amulet", "pendant" },
+    takeable = true,
+    fitsIn = { "torso" },
+  },
+  {
     id = "boulder",
     name = "heavy boulder",
     description = "A boulder taller than you are. It will not budge.",

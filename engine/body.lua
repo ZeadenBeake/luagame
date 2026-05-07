@@ -116,7 +116,7 @@ end
 
 M.HUMANOID_PARTS = {
   { id = "__human_head",      slot = "head",  name = "head" },
-  { id = "__human_torso",     slot = "torso", name = "torso" },
+  { id = "__human_torso",     slot = "torso", name = "torso", equipSlots = { "torso" } },
   { id = "__human_right_arm", slot = "arms",  name = "right arm", equipSlots = { "hold", "wear" } },
   { id = "__human_left_arm",  slot = "arms",  name = "left arm",  equipSlots = { "hold", "wear" } },
   { id = "__human_right_leg", slot = "legs",  name = "right leg", equipSlots = { "wear" } },

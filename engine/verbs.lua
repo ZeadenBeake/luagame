@@ -151,8 +151,7 @@ function M.builtins()
     if args and args[1] then
       local memberId = party.resolveByName(eng.state.party, table.concat(args, " "))
       if memberId then
-        local char = party.get(eng.state.party, memberId)
-        output.print(char.description or char.name)
+        eng:examineChar(party.get(eng.state.party, memberId))
         return
       end
     end

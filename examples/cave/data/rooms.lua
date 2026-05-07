@@ -25,7 +25,7 @@ return {
     name = "Cave Entrance",
     description = "Cold air drifts from the mouth of the cave. A boulder slumps against the south wall. The passage continues into darkness to the north.",
     exits = { south = "forest", north = "cave_interior" },
-    items = { "boulder" },
+    items = { "boulder", "feather_amulet" },
     creatures = { "old_hermit" },
   },
   {

@@ -42,15 +42,28 @@ game:registerCharacter({
 game:registerCharacter({
   id = "gar",
   name = "Gar",
-  description = "Broad-shouldered and slow-spoken. Carries trouble like a burden. Has wings.",
-  body = function(char, eng)
-    eng:setupHumanoidBody(char)
-    eng:attachPart(char, "white_wing_left")
-    eng:attachPart(char, "white_wing_right")
-  end,
+  description = "Broad-shouldered and slow-spoken. Carries trouble like a burden.",
+  body = "humanoid",
 })
 
 game:setStart("forest")
+
+-- Wire amulet magic after items are loaded
+local amulet = game.registry.items["feather_amulet"]
+amulet.onEquip = function(eng, char, _)
+  eng:attachPart(char, "white_wing_left")
+  eng:attachPart(char, "white_wing_right")
+  engine.output.print(char.name .. " feels lighter -- great wings unfurl from their back!")
+end
+amulet.onUnequip = function(eng, char, _)
+  local wings = char.body.slots["wings"]
+  if wings then
+    for i = #wings, 1, -1 do
+      eng:detachPart(char, "wings", i)
+    end
+  end
+  engine.output.print(char.name .. "'s wings vanish.")
+end
 
 -- Wire encounter trigger after rooms are loaded
 local cave = game.registry.rooms["cave_interior"]
@@ -80,7 +93,7 @@ cave.onEnter = function(eng)
 end
 
 game:registerVerb("greet", function(eng, args)
-  local room = eng.registry.rooms[eng.state.currentRoom]
+  local room = eng.registry.rooms[eng.state.party.location]
   if not room or not room.creatures or #room.creatures == 0 then
     engine.output.print("There is no one to greet.")
     return

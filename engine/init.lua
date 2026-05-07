@@ -129,6 +129,53 @@ end
 function Engine:onSave(fn) self._hooks.onSave = fn end
 function Engine:onLoad(fn) self._hooks.onLoad = fn end
 function Engine:onTurn(fn) self._hooks.onTurn = fn end
+function Engine:onExamineChar(fn) self._hooks.examineChar = fn end
+
+function Engine:examineChar(char)
+  if self._hooks.examineChar then
+    self._hooks.examineChar(self, char)
+    return
+  end
+  output.print(char.name)
+  if char.description then output.blank(); output.print(char.description) end
+  if char.body then
+    -- Equipped items: walk all part instances and collect equipment
+    local equipped = {}
+    body.iterInstances(char.body, function(_, _, instance)
+      for sType, itemId in pairs(instance.equipment) do
+        local def = self.registry.items[itemId]
+        equipped[#equipped + 1] = (def and def.name or itemId) .. " (" .. sType .. ")"
+      end
+    end)
+    if #equipped > 0 then
+      output.blank(); output.print("Equipped:")
+      for _, line in ipairs(equipped) do output.print("  " .. line) end
+    end
+    -- Notable traits: parts that grant capabilities
+    local traits = {}
+    body.iterInstances(char.body, function(_, _, instance)
+      local def = self.registry.parts[instance.defId]
+      if def and def.provides and next(def.provides) then
+        local caps = {}
+        for cap in pairs(def.provides) do caps[#caps + 1] = cap end
+        table.sort(caps)
+        local suffix = (instance.condition ~= "healthy") and (" [" .. instance.condition .. "]") or ""
+        traits[#traits + 1] = (def.name or def.id) .. " [" .. table.concat(caps, ", ") .. "]" .. suffix
+      end
+    end)
+    if #traits > 0 then
+      output.blank(); output.print("Traits:")
+      for _, line in ipairs(traits) do output.print("  " .. line) end
+    end
+  end
+  if #char.inventory > 0 then
+    output.blank(); output.print("Carrying:")
+    for _, id in ipairs(char.inventory) do
+      local def = self.registry.items[id]
+      output.print("  " .. (def and def.name or id))
+    end
+  end
+end
 
 function Engine:tick()
   self.state.world.turn = self.state.world.turn + 1
