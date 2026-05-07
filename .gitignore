@@ -39,3 +39,5 @@ luac.out
 *.x86_64
 *.hex
 
+# luagame save files
+*.save
