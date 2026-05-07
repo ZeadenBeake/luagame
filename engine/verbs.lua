@@ -1,23 +1,28 @@
 local output = require "engine.output"
 local state = require "engine.state"
 local parser = require "engine.parser"
+local party = require "engine.party"
+local character = require "engine.character"
 
 local M = {}
 
+local function itemName(eng, id)
+  local def = eng.registry.items[id]
+  return (def and def.name) or id
+end
+
 local function look(eng)
-  local room = eng.registry.rooms[eng.state.currentRoom]
+  local loc = eng.state.party.location
+  local room = eng.registry.rooms[loc]
   if not room then output.print("You are nowhere."); return end
   output.print(room.name or room.id)
   output.blank()
   if room.description then output.print(room.description) end
-  local items = state.itemsInRoom(eng.state, room.id)
+  local items = state.itemsInRoom(eng.state, loc)
   if #items > 0 then
     output.blank()
     local names = {}
-    for _, id in ipairs(items) do
-      local def = eng.registry.items[id]
-      names[#names + 1] = (def and def.name) or id
-    end
+    for _, id in ipairs(items) do names[#names + 1] = itemName(eng, id) end
     output.print("You see: " .. table.concat(names, ", ") .. ".")
   end
   if room.creatures and #room.creatures > 0 then
@@ -38,7 +43,7 @@ end
 
 local function move(dir)
   return function(eng)
-    local room = eng.registry.rooms[eng.state.currentRoom]
+    local room = eng.registry.rooms[eng.state.party.location]
     if not room or not room.exits or not room.exits[dir] then
       output.print("You can't go that way.")
       return
@@ -48,7 +53,7 @@ local function move(dir)
       output.print("The way is blocked.")
       return
     end
-    eng.state.currentRoom = target
+    eng.state.party.location = target
     look(eng)
   end
 end
@@ -61,6 +66,7 @@ function M.builtins()
     x = "examine",
     l = "look",
     q = "quit",
+    p = "party",
   }
 
   v.look = function(eng) look(eng) end
@@ -75,50 +81,76 @@ function M.builtins()
     if v[resolved] then v[resolved](eng) else output.print("You can't go that way.") end
   end
 
-  v.inventory = function(eng)
-    if #eng.state.inventory == 0 then output.print("You carry nothing."); return end
-    output.print("You are carrying:")
-    for _, id in ipairs(eng.state.inventory) do
-      local def = eng.registry.items[id]
-      output.print("  " .. ((def and def.name) or id))
+  v.inventory = function(eng, args)
+    local char
+    if args and args[1] then
+      local id = party.resolveByName(eng.state.party, table.concat(args, " "))
+      if not id then output.print("No one by that name."); return end
+      char = party.get(eng.state.party, id)
+    else
+      char = party.active(eng.state.party)
+    end
+    if not char then output.print("No one is here to check."); return end
+    if #char.inventory == 0 then
+      output.print(char.name .. " carries nothing.")
+      return
+    end
+    output.print(char.name .. " is carrying:")
+    for _, id in ipairs(char.inventory) do
+      output.print("  " .. itemName(eng, id))
     end
   end
 
   v.take = function(eng, args)
-    local roomItems = state.itemsInRoom(eng.state, eng.state.currentRoom)
+    local char = party.active(eng.state.party)
+    if not char then output.print("There is no one to act."); return end
+    local roomItems = state.itemsInRoom(eng.state, eng.state.party.location)
     local id = parser.resolveTarget(args, roomItems, eng.registry.items)
-    if not id then output.print("You don't see that here."); return end
+    if not id then output.print("There is nothing like that here."); return end
     local def = eng.registry.items[id]
     if def and def.takeable == false then
-      output.print("You can't take that.")
+      output.print(char.name .. " can't take that.")
       return
     end
-    state.removeItemFromRoom(eng.state, eng.state.currentRoom, id)
-    state.addToInventory(eng.state, id)
-    output.print("Taken.")
+    state.removeItemFromRoom(eng.state, eng.state.party.location, id)
+    character.addItem(char, id)
+    output.print(char.name .. " takes the " .. itemName(eng, id) .. ".")
   end
 
   v.drop = function(eng, args)
-    local id = parser.resolveTarget(args, eng.state.inventory, eng.registry.items)
-    if not id then output.print("You aren't carrying that."); return end
-    state.removeFromInventory(eng.state, id)
-    state.placeItem(eng.state, eng.state.currentRoom, id)
-    output.print("Dropped.")
+    local char = party.active(eng.state.party)
+    if not char then output.print("There is no one to act."); return end
+    local id = parser.resolveTarget(args, char.inventory, eng.registry.items)
+    if not id then output.print(char.name .. " isn't carrying that."); return end
+    character.removeItem(char, id)
+    state.placeItem(eng.state, eng.state.party.location, id)
+    output.print(char.name .. " drops the " .. itemName(eng, id) .. ".")
   end
 
   v.examine = function(eng, args)
+    if args and args[1] then
+      local memberId = party.resolveByName(eng.state.party, table.concat(args, " "))
+      if memberId then
+        local char = party.get(eng.state.party, memberId)
+        output.print(char.description or char.name)
+        return
+      end
+    end
     local pool = {}
-    for _, id in ipairs(state.itemsInRoom(eng.state, eng.state.currentRoom)) do
+    for _, id in ipairs(state.itemsInRoom(eng.state, eng.state.party.location)) do
       pool[#pool + 1] = id
     end
-    for _, id in ipairs(eng.state.inventory) do pool[#pool + 1] = id end
+    local char = party.active(eng.state.party)
+    if char then
+      for _, id in ipairs(char.inventory) do pool[#pool + 1] = id end
+    end
     local id = parser.resolveTarget(args, pool, eng.registry.items)
     if id then
       local def = eng.registry.items[id]
       output.print(def.description or def.name or id)
       return
     end
-    local room = eng.registry.rooms[eng.state.currentRoom]
+    local room = eng.registry.rooms[eng.state.party.location]
     local cIds = {}
     if room and room.creatures then
       for _, c in ipairs(room.creatures) do cIds[#cIds + 1] = c end
@@ -132,8 +164,30 @@ function M.builtins()
     output.print("You see nothing special.")
   end
 
+  v.switch = function(eng, args)
+    if not args or not args[1] then output.print("Switch to whom?"); return end
+    local id = party.resolveByName(eng.state.party, table.concat(args, " "))
+    if not id then output.print("No party member by that name."); return end
+    party.setActive(eng.state.party, id)
+    output.print("Now controlling " .. party.get(eng.state.party, id).name .. ".")
+  end
+
+  v.party = function(eng)
+    local list = party.list(eng.state.party)
+    if #list == 0 then output.print("You travel alone."); return end
+    output.print("Your party:")
+    for _, char in ipairs(list) do
+      local marker = (char.id == eng.state.party.active) and " (active)" or ""
+      output.print("  " .. char.name .. marker)
+    end
+  end
+
+  v.who = v.party
+
   v.help = function()
-    output.print("Verbs: look, go <dir>, north/south/east/west/up/down (n/s/e/w/u/d), take <item>, drop <item>, inventory (i), examine <thing> (x), help, quit.")
+    output.print("Verbs: look, go <dir> / n s e w u d, take <item>, drop <item>, " ..
+      "inventory [name] (i), examine <thing> (x), switch <name>, party (p), help, quit. " ..
+      "Prefix any command with 'name:' to act as that party member.")
   end
 
   v.quit = function(eng) eng._running = false end

@@ -9,6 +9,17 @@ game:loadItems(here .. "data/items.lua")
 game:loadCreatures(here .. "data/creatures.lua")
 game:loadRooms(here .. "data/rooms.lua")
 
+game:registerCharacter({
+  id = "rin",
+  name = "Rin",
+  description = "A wiry traveler with quick hands and a sharper tongue.",
+})
+game:registerCharacter({
+  id = "gar",
+  name = "Gar",
+  description = "Broad-shouldered and slow-spoken. Carries trouble like a burden.",
+})
+
 game:setStart("forest")
 
 game:registerVerb("greet", function(eng, args)

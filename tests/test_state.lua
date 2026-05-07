@@ -1,50 +1,61 @@
 local h = require "tests.helpers"
 local state = require "engine.state"
+local party = require "engine.party"
+local character = require "engine.character"
 
 local T = {}
 
-function T.place_and_list()
+function T.new_has_party_and_world_tables()
+  local s = state.new()
+  h.assertTrue(s.party)
+  h.assertTrue(s.roomItems)
+  h.assertTrue(s.flags)
+end
+
+function T.place_and_list_room_items()
   local s = state.new()
   state.placeItem(s, "r1", "a")
   state.placeItem(s, "r1", "b")
-  local items = state.itemsInRoom(s, "r1")
-  h.assertEq(#items, 2)
+  h.assertEq(#state.itemsInRoom(s, "r1"), 2)
 end
 
-function T.take_drop_cycle()
+function T.remove_item_from_room()
   local s = state.new()
   state.placeItem(s, "r1", "a")
   h.assertTrue(state.removeItemFromRoom(s, "r1", "a"))
-  state.addToInventory(s, "a")
-  h.assertTrue(state.hasItem(s, "a"))
-  state.removeFromInventory(s, "a")
-  h.assertEq(state.hasItem(s, "a"), false)
+  h.assertEq(state.removeItemFromRoom(s, "r1", "a"), false)
+end
+
+function T.snapshot_restore_round_trip()
+  local s = state.new()
+  party.add(s.party, { id = "rin", name = "Rin" })
+  s.party.location = "r1"
+  state.placeItem(s, "r2", "key")
+  character.addItem(party.active(s.party), "lantern")
+  s.flags.opened = true
+
+  local snap = state.snapshot(s)
+
+  s.party.location = "r2"
+  s.flags.opened = false
+  character.removeItem(party.active(s.party), "lantern")
+  state.removeItemFromRoom(s, "r2", "key")
+
+  state.restore(s, snap)
+
+  h.assertEq(s.party.location, "r1")
+  h.assertEq(s.flags.opened, true)
+  h.assertTrue(character.hasItem(party.active(s.party), "lantern"))
+  h.assertEq(state.itemsInRoom(s, "r2")[1], "key")
 end
 
 function T.snapshot_is_independent()
   local s = state.new()
-  s.currentRoom = "r1"
-  state.placeItem(s, "r1", "a")
-  state.addToInventory(s, "b")
-  s.flags.opened = true
+  party.add(s.party, { id = "rin" })
+  character.addItem(party.active(s.party), "lantern")
   local snap = state.snapshot(s)
-  state.removeFromInventory(s, "b")
-  s.flags.opened = false
-  h.assertEq(snap.flags.opened, true)
-  h.assertEq(snap.inventory[1], "b")
-end
-
-function T.restore_overwrites()
-  local s = state.new()
-  s.currentRoom = "r1"
-  state.addToInventory(s, "a")
-  local snap = state.snapshot(s)
-  state.addToInventory(s, "b")
-  s.currentRoom = "r2"
-  state.restore(s, snap)
-  h.assertEq(s.currentRoom, "r1")
-  h.assertEq(#s.inventory, 1)
-  h.assertEq(s.inventory[1], "a")
+  character.removeItem(party.active(s.party), "lantern")
+  h.assertEq(snap.party.characters.rin.inventory[1], "lantern")
 end
 
 return T

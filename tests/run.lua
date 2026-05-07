@@ -5,6 +5,8 @@ local suites = {
   "tests.test_registry",
   "tests.test_state",
   "tests.test_parser",
+  "tests.test_character",
+  "tests.test_party",
   "tests.test_verbs",
 }
 

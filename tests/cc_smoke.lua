@@ -19,16 +19,18 @@ local g = engine.new()
 g:loadItems("/proj/examples/cave/data/items.lua")
 g:loadCreatures("/proj/examples/cave/data/creatures.lua")
 g:loadRooms("/proj/examples/cave/data/rooms.lua")
+g:registerCharacter({ id = "rin", name = "Rin" })
 g:setStart("forest")
 
 g:run()
 
 local hasLantern = false
-for _, id in ipairs(g.state.inventory) do
+local rin = g:active()
+for _, id in ipairs(rin.inventory) do
   if id == "lantern" then hasLantern = true end
 end
 
-if g.state.currentRoom == "cave_entrance" and hasLantern then
+if g.state.party.location == "cave_entrance" and hasLantern then
   print("CC_SMOKE_OK")
 else
   print("CC_SMOKE_FAIL room=" .. tostring(g.state.currentRoom) ..

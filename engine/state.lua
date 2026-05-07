@@ -1,9 +1,10 @@
+local party = require "engine.party"
+
 local M = {}
 
 function M.new()
   return {
-    currentRoom = nil,
-    inventory = {},
+    party = party.new(),
     roomItems = {},
     flags = {},
   }
@@ -19,24 +20,6 @@ function M.removeItemFromRoom(state, roomId, itemId)
   if not list then return false end
   for i, id in ipairs(list) do
     if id == itemId then table.remove(list, i); return true end
-  end
-  return false
-end
-
-function M.addToInventory(state, itemId)
-  table.insert(state.inventory, itemId)
-end
-
-function M.removeFromInventory(state, itemId)
-  for i, id in ipairs(state.inventory) do
-    if id == itemId then table.remove(state.inventory, i); return true end
-  end
-  return false
-end
-
-function M.hasItem(state, itemId)
-  for _, id in ipairs(state.inventory) do
-    if id == itemId then return true end
   end
   return false
 end

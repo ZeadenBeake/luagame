@@ -3,6 +3,8 @@ local state = require "engine.state"
 local parser = require "engine.parser"
 local output = require "engine.output"
 local verbs = require "engine.verbs"
+local party = require "engine.party"
+local character = require "engine.character"
 local cc = require "engine.cc"
 
 local Engine = {}
@@ -24,6 +26,7 @@ end
 function Engine:registerItem(def) registry.addItem(self.registry, def) end
 function Engine:registerCreature(def) registry.addCreature(self.registry, def) end
 function Engine:registerRoom(def) registry.addRoom(self.registry, def) end
+function Engine:registerCharacter(def) party.add(self.state.party, def) end
 
 function Engine:loadItems(path) registry.loadDataFile(self.registry, path, "item") end
 function Engine:loadCreatures(path) registry.loadDataFile(self.registry, path, "creature") end
@@ -42,10 +45,15 @@ end
 
 function Engine:setStart(roomId)
   assert(self.registry.rooms[roomId], "unknown start room: " .. tostring(roomId))
-  self.state.currentRoom = roomId
+  self.state.party.location = roomId
 end
 
 function Engine:placeItem(roomId, itemId) state.placeItem(self.state, roomId, itemId) end
+
+function Engine:active() return party.active(self.state.party) end
+function Engine:setActive(id) party.setActive(self.state.party, id) end
+function Engine:partyMember(id) return party.get(self.state.party, id) end
+function Engine:partyList() return party.list(self.state.party) end
 
 function Engine:onSave(fn) self._hooks.onSave = fn end
 function Engine:onLoad(fn) self._hooks.onLoad = fn end
@@ -65,18 +73,33 @@ local function seedItemsIntoRooms(eng)
 end
 
 function Engine:dispatch(input)
-  local verb, rest = parser.parse(input, self.verbs)
+  if type(input) ~= "string" then return false end
+  local actorPart, rest = input:match("^%s*([%w_]+)%s*:%s*(.*)$")
+  if actorPart then
+    local id = party.resolveByName(self.state.party, actorPart)
+    if not id then
+      output.print("No one named '" .. actorPart .. "' is in your party.")
+      return false
+    end
+    party.setActive(self.state.party, id)
+    input = rest
+    if input == "" then return true end
+  end
+
+  local verb, restArgs = parser.parse(input, self.verbs)
   if not verb then
-    if rest then output.print("I don't know the word '" .. rest .. "'.") end
+    if restArgs then output.print("I don't know the word '" .. restArgs .. "'.") end
     return false
   end
-  self.verbs[verb](self, rest)
-  if self._hooks.onTurn then self._hooks.onTurn(self, verb, rest) end
+  self.verbs[verb](self, restArgs)
+  if self._hooks.onTurn then self._hooks.onTurn(self, verb, restArgs) end
   return true
 end
 
 function Engine:run(opts)
   opts = opts or {}
+  assert(self.state.party.active, "register at least one character before running")
+  assert(self.state.party.location, "call setStart before running")
   if not opts.skipSeed then seedItemsIntoRooms(self) end
   if self._hooks.onLoad then self._hooks.onLoad(self) end
   self._running = true
@@ -95,6 +118,8 @@ M.parser = parser
 M.output = output
 M.state = state
 M.registry = registry
+M.party = party
+M.character = character
 M.cc = cc
 
 return M
