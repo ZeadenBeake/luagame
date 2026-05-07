@@ -135,12 +135,33 @@ function T.switch_unknown_member()
   h.assertEq(g:active().id, "rin")
 end
 
-function T.address_prefix_switches_actor()
+function T.address_prefix_runs_as_named_actor()
   local g = newGame()
   g:dispatch("gar: take lantern")
-  h.assertEq(g:active().id, "gar")
   h.assertTrue(engine.character.hasItem(g:partyMember("gar"), "lantern"))
   h.assertEq(engine.character.hasItem(g:partyMember("rin"), "lantern"), false)
+end
+
+function T.address_prefix_reverts_active_after()
+  local g = newGame()
+  g:dispatch("gar: take lantern")
+  h.assertEq(g:active().id, "rin", "active should revert to rin after one-shot")
+end
+
+function T.address_prefix_does_not_revert_explicit_switch()
+  local g = newGame()
+  g:dispatch("switch gar")
+  g:dispatch("rin: look")
+  h.assertEq(g:active().id, "gar", "explicit switch should still hold after one-shot")
+end
+
+function T.address_prefix_observes_temp_actor_during_verb()
+  local g = newGame()
+  local seen
+  g:registerVerb("ping", function(eng) seen = eng:active().id end)
+  g:dispatch("gar: ping")
+  h.assertEq(seen, "gar", "verb should see gar as active during the one-shot")
+  h.assertEq(g:active().id, "rin", "but active reverts after")
 end
 
 function T.address_prefix_with_unknown_actor()
@@ -151,10 +172,10 @@ function T.address_prefix_with_unknown_actor()
   h.assertEq(g:active().id, "rin")
 end
 
-function T.address_prefix_alone_just_switches()
+function T.address_prefix_alone_is_noop()
   local g = newGame()
   g:dispatch("gar:")
-  h.assertEq(g:active().id, "gar")
+  h.assertEq(g:active().id, "rin", "empty action after prefix should not change active")
 end
 
 function T.party_listing()

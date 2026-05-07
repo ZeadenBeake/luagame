@@ -75,25 +75,35 @@ end
 function Engine:dispatch(input)
   if type(input) ~= "string" then return false end
   local actorPart, rest = input:match("^%s*([%w_]+)%s*:%s*(.*)$")
+  local previousActive
   if actorPart then
     local id = party.resolveByName(self.state.party, actorPart)
     if not id then
       output.print("No one named '" .. actorPart .. "' is in your party.")
       return false
     end
+    if rest == "" then return true end
+    previousActive = self.state.party.active
     party.setActive(self.state.party, id)
     input = rest
-    if input == "" then return true end
   end
 
   local verb, restArgs = parser.parse(input, self.verbs)
+  local ok = true
   if not verb then
     if restArgs then output.print("I don't know the word '" .. restArgs .. "'.") end
-    return false
+    ok = false
+  else
+    local pok, err = pcall(self.verbs[verb], self, restArgs)
+    if not pok then
+      if previousActive then party.setActive(self.state.party, previousActive) end
+      error(err, 0)
+    end
+    if self._hooks.onTurn then self._hooks.onTurn(self, verb, restArgs) end
   end
-  self.verbs[verb](self, restArgs)
-  if self._hooks.onTurn then self._hooks.onTurn(self, verb, restArgs) end
-  return true
+
+  if previousActive then party.setActive(self.state.party, previousActive) end
+  return ok
 end
 
 function Engine:run(opts)
