@@ -1,7 +1,7 @@
 local M = {}
 
 function M.new()
-  return { items = {}, creatures = {}, rooms = {} }
+  return { items = {}, creatures = {}, rooms = {}, parts = {}, capabilities = {} }
 end
 
 local function add(tbl, kind, def)

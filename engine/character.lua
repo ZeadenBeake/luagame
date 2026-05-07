@@ -1,3 +1,5 @@
+local bodyModule = require "engine.body"
+
 local M = {}
 
 function M.new(def)
@@ -9,6 +11,7 @@ function M.new(def)
     description = def.description,
     inventory = {},
     flags = {},
+    body = bodyModule.new(),
   }
 end
 

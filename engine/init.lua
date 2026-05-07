@@ -5,6 +5,8 @@ local output = require "engine.output"
 local verbs = require "engine.verbs"
 local party = require "engine.party"
 local character = require "engine.character"
+local body = require "engine.body"
+local capabilities = require "engine.capabilities"
 local cc = require "engine.cc"
 
 local Engine = {}
@@ -28,7 +30,28 @@ end
 function Engine:registerItem(def) registry.addItem(self.registry, def) end
 function Engine:registerCreature(def) registry.addCreature(self.registry, def) end
 function Engine:registerRoom(def) registry.addRoom(self.registry, def) end
-function Engine:registerCharacter(def) party.add(self.state.party, def) end
+
+function Engine:registerPart(def)
+  assert(type(def) == "table", "part def must be a table")
+  assert(type(def.id) == "string" and def.id ~= "", "part must have a non-empty string id")
+  assert(body.SLOTS[def.slot], "part must declare a valid slot: " ..
+    table.concat((function() local t={} for k in pairs(body.SLOTS) do t[#t+1]=k end return t end)(), ", "))
+  assert(not self.registry.parts[def.id], "duplicate part id: " .. def.id)
+  self.registry.parts[def.id] = def
+end
+
+function Engine:registerCapability(name, aggregation)
+  capabilities.register(self.registry.capabilities, name, aggregation)
+end
+
+function Engine:registerCharacter(def)
+  party.add(self.state.party, def)
+  if def.body == "humanoid" then
+    self:setupHumanoidBody(party.get(self.state.party, def.id))
+  elseif type(def.body) == "function" then
+    def.body(party.get(self.state.party, def.id), self)
+  end
+end
 
 function Engine:loadItems(path) registry.loadDataFile(self.registry, path, "item") end
 function Engine:loadCreatures(path) registry.loadDataFile(self.registry, path, "creature") end
@@ -57,6 +80,51 @@ function Engine:setActive(id) party.setActive(self.state.party, id) end
 function Engine:partyMember(id) return party.get(self.state.party, id) end
 function Engine:partyList() return party.list(self.state.party) end
 
+function Engine:setupHumanoidBody(char)
+  for _, partDef in ipairs(body.HUMANOID_PARTS) do
+    if not self.registry.parts[partDef.id] then
+      self.registry.parts[partDef.id] = partDef
+    end
+    body.attach(char.body, partDef, self, char)
+  end
+end
+
+function Engine:attachPart(char, partDefOrId)
+  local def = type(partDefOrId) == "string" and self.registry.parts[partDefOrId] or partDefOrId
+  assert(def and type(def.id) == "string", "invalid part def or unknown part id")
+  return body.attach(char.body, def, self, char)
+end
+
+function Engine:detachPart(char, slotName, index)
+  local instance = char.body.slots[slotName] and char.body.slots[slotName][index]
+  if not instance then return false end
+  return body.detach(char.body, slotName, index, self.registry.parts[instance.defId], self, char)
+end
+
+function Engine:setPartCondition(char, slotName, index, condition)
+  local instance = char.body.slots[slotName] and char.body.slots[slotName][index]
+  if not instance then return false end
+  return body.setCondition(char.body, slotName, index, condition,
+    self.registry.parts[instance.defId], self, char)
+end
+
+function Engine:queryCapability(char, capName)
+  return capabilities.query(self.registry.capabilities, char,
+    self.registry.parts, self.registry.items, capName)
+end
+
+function Engine:charHas(char, capName)
+  local val = self:queryCapability(char, capName)
+  return val ~= nil and val ~= false and val ~= 0
+end
+
+function Engine:partyHas(capName)
+  for _, char in pairs(self.state.party.characters) do
+    if char.body and self:charHas(char, capName) then return true end
+  end
+  return false
+end
+
 function Engine:onSave(fn) self._hooks.onSave = fn end
 function Engine:onLoad(fn) self._hooks.onLoad = fn end
 function Engine:onTurn(fn) self._hooks.onTurn = fn end
@@ -64,6 +132,11 @@ function Engine:onTurn(fn) self._hooks.onTurn = fn end
 function Engine:tick()
   self.state.world.turn = self.state.world.turn + 1
   local turn = self.state.world.turn
+  for _, char in pairs(self.state.party.characters) do
+    if char.body then
+      body.tickParts(char.body, self.registry.parts, self, char, turn)
+    end
+  end
   for _, fn in ipairs(self._tickHooks) do fn(self, turn) end
   local remaining = {}
   for _, entry in ipairs(self._scheduled) do
@@ -163,6 +236,8 @@ M.state = state
 M.registry = registry
 M.party = party
 M.character = character
+M.body = body
+M.capabilities = capabilities
 M.cc = cc
 
 return M

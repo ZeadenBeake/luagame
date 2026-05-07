@@ -2,9 +2,23 @@ return {
   {
     id = "forest",
     name = "Edge of the Forest",
-    description = "Pines crowd close, their needles muffling every sound. A worn path leads north toward a dark cave mouth.",
-    exits = { north = "cave_entrance" },
+    description = "Pines crowd close, their needles muffling every sound. A worn path leads north toward a dark cave mouth. A rocky ledge juts out to the east -- too high to climb without wings.",
+    exits = {
+      north = "cave_entrance",
+      east = {
+        to = "rocky_ledge",
+        requires = { flight = true },
+        blockedMessage = "The ledge is twenty feet up. You'd need wings to reach it.",
+      },
+    },
     items = { "lantern" },
+  },
+  {
+    id = "rocky_ledge",
+    name = "Rocky Ledge",
+    description = "The forest spreads out below you. A small hollow in the rock face holds something glinting.",
+    exits = { west = "forest" },
+    items = { "silver_coin" },
   },
   {
     id = "cave_entrance",

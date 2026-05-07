@@ -1,5 +1,11 @@
 return {
   {
+    id = "silver_coin",
+    name = "silver coin",
+    description = "An old coin, tarnished but still bearing a worn profile.",
+    takeable = true,
+  },
+  {
     id = "lantern",
     name = "brass lantern",
     description = "A small brass lantern, dented but serviceable. It casts a warm glow.",

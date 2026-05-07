@@ -72,7 +72,7 @@ end
 function T.movement_blocked_when_no_exit()
   local g = newGame()
   mock.clear()
-  g:dispatch("east")
+  g:dispatch("west")
   h.assertContains(mock.output(), "can't go that way")
 end
 

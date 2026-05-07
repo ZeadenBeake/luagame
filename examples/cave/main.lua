@@ -9,15 +9,45 @@ game:loadItems(here .. "data/items.lua")
 game:loadCreatures(here .. "data/creatures.lua")
 game:loadRooms(here .. "data/rooms.lua")
 
+game:registerCapability("flight", "all")
+
+game:registerPart({
+  id = "white_wing_left",
+  slot = "wings",
+  name = "left white wing",
+  description = "A broad feathered wing, white as new snow.",
+  provides = { flight = true },
+  onAttach = function(_, char) engine.output.print(char.name .. " spreads their left wing.") end,
+  onConditionChange = function(_, char, _, oldC, newC)
+    if newC == "injured" then
+      engine.output.print(char.name .. "'s left wing is injured -- flight lost.")
+    end
+  end,
+})
+game:registerPart({
+  id = "white_wing_right",
+  slot = "wings",
+  name = "right white wing",
+  description = "A broad feathered wing, white as new snow.",
+  provides = { flight = true },
+  onAttach = function(_, char) engine.output.print(char.name .. " spreads their right wing.") end,
+})
+
 game:registerCharacter({
   id = "rin",
   name = "Rin",
   description = "A wiry traveler with quick hands and a sharper tongue.",
+  body = "humanoid",
 })
 game:registerCharacter({
   id = "gar",
   name = "Gar",
-  description = "Broad-shouldered and slow-spoken. Carries trouble like a burden.",
+  description = "Broad-shouldered and slow-spoken. Carries trouble like a burden. Has wings.",
+  body = function(char, eng)
+    eng:setupHumanoidBody(char)
+    eng:attachPart(char, "white_wing_left")
+    eng:attachPart(char, "white_wing_right")
+  end,
 })
 
 game:setStart("forest")

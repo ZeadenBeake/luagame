@@ -3,6 +3,7 @@ local state = require "engine.state"
 local parser = require "engine.parser"
 local party = require "engine.party"
 local character = require "engine.character"
+local body = require "engine.body"
 
 local M = {}
 
@@ -48,12 +49,26 @@ local function move(dir)
       output.print("You can't go that way.")
       return
     end
-    local target = room.exits[dir]
-    if not eng.registry.rooms[target] then
+    local exitData = room.exits[dir]
+    local targetId
+    if type(exitData) == "string" then
+      targetId = exitData
+    else
+      targetId = exitData.to
+      if exitData.requires then
+        for capName in pairs(exitData.requires) do
+          if not eng:partyHas(capName) then
+            output.print(exitData.blockedMessage or "You can't go that way.")
+            return
+          end
+        end
+      end
+    end
+    if not eng.registry.rooms[targetId] then
       output.print("The way is blocked.")
       return
     end
-    eng.state.party.location = target
+    eng.state.party.location = targetId
     look(eng)
     eng:tick()
   end
@@ -165,6 +180,51 @@ function M.builtins()
       return
     end
     output.print("You see nothing special.")
+  end
+
+  v.equip = function(eng, args)
+    local char = party.active(eng.state.party)
+    if not char then output.print("There is no one to act."); return end
+    local id = parser.resolveTarget(args, char.inventory, eng.registry.items)
+    if not id then output.print(char.name .. " isn't carrying that."); return end
+    local def = eng.registry.items[id]
+    if not def or not def.fitsIn or #def.fitsIn == 0 then
+      output.print("That can't be equipped.")
+      return
+    end
+    for _, slotType in ipairs(def.fitsIn) do
+      local _, _, sType, instance = body.findFreeEquipSlot(char.body, eng.registry.parts, slotType)
+      if instance and sType then
+        character.removeItem(char, id)
+        instance.equipment[sType] = id
+        if def.onEquip then def.onEquip(eng, char, instance) end
+        output.print(char.name .. " equips the " .. itemName(eng, id) .. ".")
+        eng:tick()
+        return
+      end
+    end
+    output.print("There is nowhere suitable to equip that.")
+  end
+
+  v.unequip = function(eng, args)
+    local char = party.active(eng.state.party)
+    if not char then output.print("There is no one to act."); return end
+    local equipped = {}
+    body.iterInstances(char.body, function(_, _, instance)
+      for _, itemId in pairs(instance.equipment) do
+        equipped[#equipped + 1] = itemId
+      end
+    end)
+    local id = parser.resolveTarget(args, equipped, eng.registry.items)
+    if not id then output.print(char.name .. " doesn't have that equipped."); return end
+    local _, _, sType, instance = body.findEquipped(char.body, id)
+    if not instance or not sType then output.print(char.name .. " doesn't have that equipped."); return end
+    local def = eng.registry.items[id]
+    instance.equipment[sType] = nil
+    character.addItem(char, id)
+    if def and def.onUnequip then def.onUnequip(eng, char, instance) end
+    output.print(char.name .. " unequips the " .. itemName(eng, id) .. ".")
+    eng:tick()
   end
 
   v.switch = function(eng, args)
