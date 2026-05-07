@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lua-tests:
+    name: Pure-Lua tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua
+        run: sudo apt-get update && sudo apt-get install -y lua5.3
+      - name: Run tests
+        run: lua5.3 tests/run.lua
+
+  craftos-smoke:
+    name: CraftOS-PC headless smoke
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CraftOS-PC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository -y ppa:jackmacwindows/craftos-pc
+          sudo apt-get update
+          sudo apt-get install -y craftos-pc
+      - name: Run headless smoke test
+        run: |
+          set -o pipefail
+          out=$(timeout 60 craftos --headless --mount-ro /proj=. --script tests/cc_smoke.lua 2>&1)
+          echo "$out"
+          if echo "$out" | grep -q "CC_SMOKE_FAIL"; then
+            echo "::error::Smoke test reported failure"
+            exit 1
+          fi
+          if ! echo "$out" | grep -q "CC_SMOKE_OK"; then
+            echo "::error::Smoke test marker not found in output"
+            exit 1
+          fi
