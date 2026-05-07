@@ -131,6 +131,11 @@ function Engine:onLoad(fn) self._hooks.onLoad = fn end
 function Engine:onTurn(fn) self._hooks.onTurn = fn end
 function Engine:onExamineChar(fn) self._hooks.examineChar = fn end
 
+local function itemName(reg, id)
+  local def = reg[id]
+  return (def and def.name) or id
+end
+
 function Engine:examineChar(char)
   if self._hooks.examineChar then
     self._hooks.examineChar(self, char)
@@ -139,21 +144,11 @@ function Engine:examineChar(char)
   output.print(char.name)
   if char.description then output.blank(); output.print(char.description) end
   if char.body then
-    -- Equipped items: walk all part instances and collect equipment
-    local equipped = {}
+    local equipped, traits = {}, {}
     body.iterInstances(char.body, function(_, _, instance)
       for sType, itemId in pairs(instance.equipment) do
-        local def = self.registry.items[itemId]
-        equipped[#equipped + 1] = (def and def.name or itemId) .. " (" .. sType .. ")"
+        equipped[#equipped + 1] = itemName(self.registry.items, itemId) .. " (" .. sType .. ")"
       end
-    end)
-    if #equipped > 0 then
-      output.blank(); output.print("Equipped:")
-      for _, line in ipairs(equipped) do output.print("  " .. line) end
-    end
-    -- Notable traits: parts that grant capabilities
-    local traits = {}
-    body.iterInstances(char.body, function(_, _, instance)
       local def = self.registry.parts[instance.defId]
       if def and def.provides and next(def.provides) then
         local caps = {}
@@ -163,6 +158,10 @@ function Engine:examineChar(char)
         traits[#traits + 1] = (def.name or def.id) .. " [" .. table.concat(caps, ", ") .. "]" .. suffix
       end
     end)
+    if #equipped > 0 then
+      output.blank(); output.print("Equipped:")
+      for _, line in ipairs(equipped) do output.print("  " .. line) end
+    end
     if #traits > 0 then
       output.blank(); output.print("Traits:")
       for _, line in ipairs(traits) do output.print("  " .. line) end
@@ -171,8 +170,7 @@ function Engine:examineChar(char)
   if #char.inventory > 0 then
     output.blank(); output.print("Carrying:")
     for _, id in ipairs(char.inventory) do
-      local def = self.registry.items[id]
-      output.print("  " .. (def and def.name or id))
+      output.print("  " .. itemName(self.registry.items, id))
     end
   end
 end
@@ -238,19 +236,11 @@ function Engine:startEncounter(opts)
   enc.actorMaxAp = {}
 
   for _, actor in ipairs(opts.actors) do
-    local isPlayer
-    if actor.isPlayer ~= nil then
-      isPlayer = actor.isPlayer
-    elseif actor.act then
-      isPlayer = false
-    else
-      isPlayer = self.state.party.characters[actor.id] ~= nil
-    end
     local partyChar = self.state.party.characters[actor.id]
     self._encounter.actorDefs[actor.id] = {
       id = actor.id,
       name = actor.name or (partyChar and partyChar.name) or actor.id,
-      isPlayer = isPlayer,
+      isPlayer = turnorder.isPlayerActor(actor, self.state.party.characters),
       act = actor.act,
     }
     local maxAp = actor.maxAp or 1
@@ -287,7 +277,7 @@ function Engine:endEncounter(reason)
 end
 
 function Engine:spendAp(n)
-  if not self:inEncounter() or not self._encounter then return end
+  if not self:inEncounter() then return end
   local actorId = self.state.encounter.actorOrder[self.state.encounter.currentIndex]
   if not actorId then return end
   local ap = (self.state.encounter.actorAp[actorId] or 0) - (n or 1)
