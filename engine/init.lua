@@ -7,6 +7,7 @@ local party = require "engine.party"
 local character = require "engine.character"
 local body = require "engine.body"
 local capabilities = require "engine.capabilities"
+local turnorder = require "engine.turnorder"
 local cc = require "engine.cc"
 
 local Engine = {}
@@ -147,6 +148,7 @@ function Engine:tick()
     end
   end
   self._scheduled = remaining
+  if self:inEncounter() then self:spendAp(1) end
 end
 
 function Engine:onTick(fn)
@@ -164,6 +166,154 @@ function Engine:scheduleIn(delta, fn)
   assert(type(delta) == "number" and delta > 0, "scheduleIn: delta must be a positive number")
   self:scheduleAt(self.state.world.turn + delta, fn)
 end
+
+-- ── Encounter ────────────────────────────────────────────────────────────────
+
+function Engine:inEncounter()
+  return self.state.encounter ~= nil and self.state.encounter.active == true
+end
+
+function Engine:startEncounter(opts)
+  assert(not self:inEncounter(), "already in an encounter")
+  assert(opts and opts.actors and #opts.actors > 0, "startEncounter needs at least one actor")
+
+  self._encounter = {
+    actorDefs = {},
+    nextActorFn = opts.nextActor,
+    onEnd = opts.onEnd,
+    onTurnStart = opts.onTurnStart,
+    onTurnEnd = opts.onTurnEnd,
+    _endTurnRequested = false,
+  }
+
+  local enc = self.state.encounter
+  enc.actorAp = {}
+  enc.actorMaxAp = {}
+
+  for _, actor in ipairs(opts.actors) do
+    local isPlayer
+    if actor.isPlayer ~= nil then
+      isPlayer = actor.isPlayer
+    elseif actor.act then
+      isPlayer = false
+    else
+      isPlayer = self.state.party.characters[actor.id] ~= nil
+    end
+    local partyChar = self.state.party.characters[actor.id]
+    self._encounter.actorDefs[actor.id] = {
+      id = actor.id,
+      name = actor.name or (partyChar and partyChar.name) or actor.id,
+      isPlayer = isPlayer,
+      act = actor.act,
+    }
+    local maxAp = actor.maxAp or 1
+    enc.actorMaxAp[actor.id] = maxAp
+    enc.actorAp[actor.id] = maxAp
+  end
+
+  local order
+  if type(opts.turnOrder) == "function" then
+    order = opts.turnOrder(opts.actors, self.state.party.characters)
+  elseif type(opts.turnOrder) == "table" then
+    order = opts.turnOrder
+  else
+    order = {}
+    for _, actor in ipairs(opts.actors) do order[#order + 1] = actor.id end
+  end
+  enc.actorOrder = order
+  enc.currentIndex = 1
+  enc.active = true
+
+  if opts.banner then output.blank(); output.print(opts.banner); output.blank() end
+end
+
+function Engine:endEncounter(reason)
+  if not self._encounter then return end
+  self.state.encounter.active = false
+  self.state.encounter.actorOrder = {}
+  self.state.encounter.currentIndex = 1
+  self.state.encounter.actorAp = {}
+  self.state.encounter.actorMaxAp = {}
+  local onEnd = self._encounter.onEnd
+  self._encounter = nil
+  if onEnd then onEnd(self, reason) end
+end
+
+function Engine:spendAp(n)
+  if not self:inEncounter() or not self._encounter then return end
+  local actorId = self.state.encounter.actorOrder[self.state.encounter.currentIndex]
+  if not actorId then return end
+  local ap = (self.state.encounter.actorAp[actorId] or 0) - (n or 1)
+  self.state.encounter.actorAp[actorId] = math.max(ap, 0)
+  if ap <= 0 then self._encounter._endTurnRequested = true end
+end
+
+function Engine:endTurn()
+  if self._encounter then self._encounter._endTurnRequested = true end
+end
+
+function Engine:_doEncounterTurn()
+  local enc = self._encounter
+  local encState = self.state.encounter
+  if not enc or not encState.active then return end
+
+  local actorId
+  if enc.nextActorFn then
+    actorId = enc.nextActorFn(self, enc._lastActorId)
+    if not actorId then
+      if encState.active then self:endEncounter("turn_order_exhausted") end
+      return
+    end
+    for i, id in ipairs(encState.actorOrder) do
+      if id == actorId then encState.currentIndex = i; break end
+    end
+  else
+    actorId = encState.actorOrder[encState.currentIndex]
+    if not actorId then self:endEncounter("no_actors"); return end
+  end
+
+  local maxAp = encState.actorMaxAp[actorId] or 1
+  encState.actorAp[actorId] = maxAp
+  enc._endTurnRequested = false
+
+  local def = enc.actorDefs[actorId]
+  local partyChar = self.state.party.characters[actorId]
+  local actorName = (def and def.name) or (partyChar and partyChar.name) or actorId
+
+  if partyChar and partyChar.body then
+    body.turnStartParts(partyChar.body, self.registry.parts, self, partyChar)
+  end
+  if enc.onTurnStart then enc.onTurnStart(self, actorId) end
+
+  if def and not def.isPlayer and def.act then
+    def.act(self, def)
+  elseif partyChar then
+    party.setActive(self.state.party, actorId)
+    output.print("-- " .. actorName .. "'s turn --")
+    while self._running and encState.active do
+      local ap = encState.actorAp[actorId] or 0
+      if ap <= 0 or enc._endTurnRequested then break end
+      output.blank()
+      local input = cc.readLine(actorName .. " [AP:" .. ap .. "]> ")
+      if not input then self._running = false; break end
+      self:dispatch(input)
+    end
+  end
+
+  if partyChar and partyChar.body then
+    body.turnEndParts(partyChar.body, self.registry.parts, self, partyChar)
+  end
+  if enc.onTurnEnd then enc.onTurnEnd(self, actorId) end
+
+  enc._lastActorId = actorId
+
+  if encState.active and not enc.nextActorFn then
+    local len = #encState.actorOrder
+    encState.currentIndex = (encState.currentIndex % len) + 1
+  end
+end
+
+-- ── End encounter ─────────────────────────────────────────────────────────────
 
 function Engine:snapshot() return state.snapshot(self.state) end
 function Engine:restore(snap) state.restore(self.state, snap) end
@@ -222,10 +372,14 @@ function Engine:run(opts)
   if opts.banner then output.print(opts.banner); output.blank() end
   if self.verbs.look then self.verbs.look(self) end
   while self._running do
-    output.blank()
-    local input = cc.readLine("> ")
-    if not input then break end
-    self:dispatch(input)
+    if self:inEncounter() then
+      self:_doEncounterTurn()
+    else
+      output.blank()
+      local input = cc.readLine("> ")
+      if not input then break end
+      self:dispatch(input)
+    end
   end
   if self._hooks.onSave then self._hooks.onSave(self) end
 end
@@ -238,6 +392,7 @@ M.party = party
 M.character = character
 M.body = body
 M.capabilities = capabilities
+M.turnorder = turnorder
 M.cc = cc
 
 return M

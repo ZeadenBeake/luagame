@@ -11,6 +11,7 @@ local suites = {
   "tests.test_world",
   "tests.test_body",
   "tests.test_capabilities",
+  "tests.test_encounter",
 }
 
 local total, failed = 0, 0

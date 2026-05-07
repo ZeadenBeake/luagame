@@ -52,6 +52,33 @@ game:registerCharacter({
 
 game:setStart("forest")
 
+-- Wire encounter trigger after rooms are loaded
+local cave = game.registry.rooms["cave_interior"]
+cave.onEnter = function(eng)
+  if eng.state.flags.spider_defeated then return end
+  engine.output.print("A large cave spider drops from the ceiling, blocking the exit!")
+  eng:startEncounter({
+    banner = "=== Spider Encounter ===",
+    actors = {
+      { id = "rin" },
+      { id = "gar" },
+      { id = "spider", name = "Cave Spider",
+        act = function(e, _)
+          engine.output.print("The spider snaps its mandibles -- then retreats into a crevice.")
+          e.state.flags.spider_defeated = true
+          e:endEncounter("spider_fled")
+        end,
+      },
+    },
+    turnOrder = engine.turnorder.playersFirst,
+    onEnd = function(_, reason)
+      if reason == "spider_fled" then
+        engine.output.print("The way is clear.")
+      end
+    end,
+  })
+end
+
 game:registerVerb("greet", function(eng, args)
   local room = eng.registry.rooms[eng.state.currentRoom]
   if not room or not room.creatures or #room.creatures == 0 then

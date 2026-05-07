@@ -8,6 +8,13 @@ function M.new()
     roomItems = {},
     flags = {},
     world = { turn = 0 },
+    encounter = {
+      active = false,
+      actorOrder = {},
+      currentIndex = 1,
+      actorAp = {},
+      actorMaxAp = {},
+    },
   }
 end
 

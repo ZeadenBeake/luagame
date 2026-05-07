@@ -70,6 +70,8 @@ local function move(dir)
     end
     eng.state.party.location = targetId
     look(eng)
+    local newRoom = eng.registry.rooms[targetId]
+    if newRoom and newRoom.onEnter then newRoom.onEnter(eng) end
     eng:tick()
   end
 end
@@ -247,10 +249,23 @@ function M.builtins()
 
   v.who = v.party
 
-  v.help = function()
-    output.print("Verbs: look, go <dir> / n s e w u d, take <item>, drop <item>, " ..
-      "inventory [name] (i), examine <thing> (x), switch <name>, party (p), help, quit. " ..
-      "Prefix any command with 'name:' to act as that party member.")
+  v.endturn = function(eng)
+    if not eng:inEncounter() then
+      output.print("You aren't in an encounter.")
+      return
+    end
+    eng:endTurn()
+  end
+
+  v.help = function(eng)
+    local base = "Verbs: look, go <dir> / n s e w u d, take <item>, drop <item>, " ..
+      "inventory [name] (i), examine <thing> (x), equip/unequip <item>, " ..
+      "switch <name>, party (p), help, quit. " ..
+      "Prefix any command with 'name:' to act as that party member."
+    if eng:inEncounter() then
+      base = base .. " In encounter: endturn to pass your remaining AP."
+    end
+    output.print(base)
   end
 
   v.quit = function(eng) eng._running = false end
